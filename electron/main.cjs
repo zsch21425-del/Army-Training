@@ -3,10 +3,57 @@
 
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("node:path");
+const fs = require("node:fs");
+const { spawn } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 
 let controlWindow = null;
 let driverSession = null; // active Playwright session, if any
+
+// Store downloaded Chromium in the user-data dir so it persists across
+// uninstalls and stays out of Program Files (which needs admin rights).
+function browsersPath() {
+  return path.join(app.getPath("userData"), "playwright-browsers");
+}
+
+// Ensure Playwright's Chromium exists. If not, spawn the playwright CLI
+// using Electron-as-Node to download it. First run only; subsequent runs
+// skip immediately.
+async function ensureChromium(emitLog) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = browsersPath();
+  let chromium;
+  try {
+    chromium = require("playwright").chromium;
+    const exe = chromium.executablePath();
+    if (exe && fs.existsSync(exe)) return exe;
+  } catch { /* fall through to install */ }
+
+  emitLog?.({ msg: "First-run setup: downloading Chromium (~170 MB, one-time)...", level: "dim" });
+  const cliPath = require.resolve("playwright-core/cli.js");
+  await new Promise((resolve, reject) => {
+    const proc = spawn(process.execPath, [cliPath, "install", "chromium"], {
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        PLAYWRIGHT_BROWSERS_PATH: browsersPath(),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stderr = "";
+    proc.stdout.on("data", (d) => {
+      const s = d.toString().trim();
+      if (s) emitLog?.({ msg: s, level: "dim" });
+    });
+    proc.stderr.on("data", (d) => { stderr += d.toString(); });
+    proc.on("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Chromium install exited ${code}: ${stderr.slice(0, 400)}`));
+    });
+    proc.on("error", reject);
+  });
+  emitLog?.({ msg: "Chromium ready.", level: "ok" });
+  return require("playwright").chromium.executablePath();
+}
 
 async function createControlWindow() {
   controlWindow = new BrowserWindow({
@@ -43,17 +90,20 @@ function bundledGameUrl() {
 ipcMain.handle("bot:start", async (_evt, opts) => {
   if (driverSession) return { ok: false, error: "Session already running" };
   try {
+    const emitLog = (line) => broadcast("bot:log", line);
+    // Ensure Playwright's Chromium is available (first-run downloads it).
+    const chromiumPath =
+      process.env.PLAYWRIGHT_CHROMIUM_PATH || (await ensureChromium(emitLog));
+
     const { startSession } = await loadDriver();
-    // When site is "bundled" and no URL given, synthesize a file:// URL to
-    // the local game. Use env override for dev convenience.
     const resolvedUrl =
       (opts && opts.url) ||
       (opts && opts.site === "bundled" ? bundledGameUrl() : undefined);
     driverSession = await startSession({
       ...opts,
       url: resolvedUrl,
-      chromiumExecutablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
-      onLog: (line) => broadcast("bot:log", line),
+      chromiumExecutablePath: chromiumPath,
+      onLog: emitLog,
       onStats: (stats) => broadcast("bot:stats", stats),
       onEnd: (reason) => {
         driverSession = null;
