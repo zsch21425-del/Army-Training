@@ -6,20 +6,22 @@
 import { chromium } from "playwright";
 import { LiveAgent } from "../blackjack/live-agent.js";
 import { wizardofodds } from "./adapters/wizardofodds.js";
+import { bundled } from "./adapters/bundled.js";
 
-const ADAPTERS = { wizardofodds };
+const ADAPTERS = { bundled, wizardofodds };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function startSession(opts) {
   const {
-    site = "wizardofodds",
+    site = "bundled",
     url,
     unit = 25,
     bankroll = 10000,
     mode = "spread",
     actionDelayMs = 600,
     maxRounds = 0,
+    chromiumExecutablePath,
     onLog = () => {},
     onStats = () => {},
     onEnd = () => {},
@@ -37,6 +39,7 @@ export async function startSession(opts) {
   log(`Launching Chromium...`, "dim");
   const browser = await chromium.launch({
     headless: false,
+    executablePath: chromiumExecutablePath || undefined,
     args: ["--window-size=1280,860"],
   });
   const context = await browser.newContext({ viewport: { width: 1280, height: 860 } });
@@ -84,22 +87,23 @@ export async function startSession(opts) {
         await sleep(actionDelayMs);
         await playHand(page, adapter, agent, actionDelayMs, log);
 
-        // End-of-round: settle by comparing totals (best-effort).
-        await sleep(actionDelayMs);
-        const state = await adapter.readState(page);
-        agent.observeCards(state.player);
-        agent.observeCards(state.dealer);
-        const pTotal = agent.handTotal(state.player.map((c) => c.rank)).total;
-        const dTotal = agent.handTotal(state.dealer.map((c) => c.rank)).total;
-        const outcome = adapter.classifyOutcome(state.message, pTotal, dTotal, pTotal > 21);
-        const net = settlementNet(outcome, bet, state);
+        // Wait for the round to finish (dealer plays + settle shown).
+        const endState = await waitForSettle(page, adapter);
+        agent.observeCards(endState.player);
+        agent.observeCards(endState.dealer);
+        const pTotal = agent.handTotal(endState.player.map((c) => c.rank)).total;
+        const dTotal = agent.handTotal(endState.dealer.map((c) => c.rank)).total;
+        const outcome = adapter.classifyOutcome(endState.message, pTotal, dTotal, pTotal > 21);
+        const net = settlementNet(outcome, bet, endState);
         agent.settleRound({ net, outcome, bet });
 
         log(`Round ${agent.stats.rounds}: P=${pTotal} D=${dTotal} ${outcome.toUpperCase()} ${fmtSigned(net)} | bank $${agent.bankroll.toFixed(2)} | RC=${agent.runningCount} TC=${agent.trueCount().toFixed(2)}`,
             net > 0 ? "ok" : net < 0 ? "err" : "dim");
         emitStats();
 
-        await sleep(actionDelayMs);
+        // Wait for phase to return to betting (round fully reset) before next round.
+        await waitForBettingPhase(page);
+        await sleep(Math.max(120, actionDelayMs / 2));
       }
     } catch (err) {
       log("Driver error: " + (err && err.stack ? err.stack : err), "err");
@@ -118,12 +122,11 @@ export async function startSession(opts) {
 }
 
 async function playHand(page, adapter, agent, delay, log) {
-  // Up to 20 decisions per hand — more than enough for any blackjack hand
-  // including splits. Defensive bound against infinite loops if state parsing
-  // breaks down.
-  for (let step = 0; step < 20; step++) {
+  // Up to 40 decisions per hand — generous enough for 4-way splits that
+  // may each spawn multiple hits. Defensive bound against infinite loops.
+  for (let step = 0; step < 40; step++) {
     const state = await adapter.readState(page);
-    agent.observeCards(state.player);
+    agent.observeCards(state.observedPlayerCards || state.player);
     agent.observeCards(state.dealer);
 
     if (state.insuranceOffered) {
@@ -134,7 +137,20 @@ async function playHand(page, adapter, agent, delay, log) {
       continue;
     }
 
-    if (!state.playerTurn) return; // round over (dealer acting or settled)
+    // Trust the bundled game's phase reporter if present — the DOM action
+    // buttons briefly disable between split branches, which would otherwise
+    // look like "round over" to a pure DOM probe.
+    const phase = await page.evaluate(() => (window.__bj ? window.__bj.getState().phase : null)).catch(() => null);
+    if (phase && (phase === "dealerTurn" || phase === "settle" || phase === "betting")) return;
+
+    if (!state.playerTurn) {
+      if (phase === "playerTurn") {
+        // Transient disabled state between branches; wait and retry.
+        await sleep(delay);
+        continue;
+      }
+      return; // round over (dealer acting or settled)
+    }
 
     if (state.player.length === 0 || !state.dealer[0]) {
       await sleep(delay);
@@ -160,9 +176,9 @@ async function playHand(page, adapter, agent, delay, log) {
       return;
     }
     await sleep(delay);
-
-    // If we doubled or stood, the hand is done on this branch.
-    if (action === "D" || action === "S" || action === "R") return;
+    // For D/S/R on the CURRENT branch, continue looping — there may be more
+    // split branches waiting. The phase check at the top will exit when the
+    // whole hand is truly done.
   }
 }
 
@@ -176,6 +192,39 @@ function actionLabel(a) {
 
 function fmtSigned(n) {
   return (n >= 0 ? "+$" : "-$") + Math.abs(n).toFixed(2);
+}
+
+// Poll the page until it's clear the round has ended: prefer the bundled
+// game's __bj API if present; otherwise settle for a non-empty message or
+// a completed dealer hand.
+async function waitForSettle(page, adapter, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < deadline) {
+    // Bundled-game fast path.
+    const bj = await page.evaluate(() => (window.__bj ? window.__bj.getState() : null)).catch(() => null);
+    if (bj && (bj.phase === "settle" || bj.phase === "betting")) {
+      last = await adapter.readState(page);
+      if (bj.phase === "settle") return last;
+    }
+    // External-site fallback: look for a message or completed hand.
+    last = await adapter.readState(page);
+    if (!last.playerTurn && last.dealer.length >= 2 && (last.message || last.player.length > 0)) {
+      return last;
+    }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return last || { player: [], dealer: [], message: "" };
+}
+
+async function waitForBettingPhase(page, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const bj = await page.evaluate(() => (window.__bj ? window.__bj.getState() : null)).catch(() => null);
+    if (!bj) return; // external site — caller already slept
+    if (bj.phase === "betting") return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
 function settlementNet(outcome, bet, _state) {

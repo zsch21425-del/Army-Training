@@ -35,12 +35,24 @@ async function loadDriver() {
   return import(url);
 }
 
+function bundledGameUrl() {
+  const p = path.join(__dirname, "..", "bundled-game", "index.html");
+  return pathToFileURL(p).href;
+}
+
 ipcMain.handle("bot:start", async (_evt, opts) => {
   if (driverSession) return { ok: false, error: "Session already running" };
   try {
     const { startSession } = await loadDriver();
+    // When site is "bundled" and no URL given, synthesize a file:// URL to
+    // the local game. Use env override for dev convenience.
+    const resolvedUrl =
+      (opts && opts.url) ||
+      (opts && opts.site === "bundled" ? bundledGameUrl() : undefined);
     driverSession = await startSession({
       ...opts,
+      url: resolvedUrl,
+      chromiumExecutablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
       onLog: (line) => broadcast("bot:log", line),
       onStats: (stats) => broadcast("bot:stats", stats),
       onEnd: (reason) => {

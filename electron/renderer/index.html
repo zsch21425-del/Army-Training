@@ -80,12 +80,13 @@
     <main>
       <aside class="panel">
         <h2>Session</h2>
-        <label for="site">Site</label>
+        <label for="site">Table</label>
         <select id="site">
-          <option value="wizardofodds">Wizard of Odds (free)</option>
+          <option value="bundled">Bundled local game (default)</option>
+          <option value="wizardofodds">Wizard of Odds — selectors may need tuning</option>
         </select>
-        <label for="url">Game URL</label>
-        <input id="url" value="https://wizardofodds.com/play/blackjack/" />
+        <label for="url">Override URL (leave blank for default)</label>
+        <input id="url" placeholder="auto — file:// for bundled, site URL otherwise" />
         <label for="unit">Unit bet ($)</label>
         <input id="unit" type="number" value="25" min="1" />
         <label for="bankroll">Starting bankroll ($)</label>
