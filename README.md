@@ -8,8 +8,10 @@ Autonomous 6-deck blackjack player with Hi-Lo counting, Illustrious 18, and Fab 
 
 SHA-256:
 ```
-03864c2b96105a7023226fc32eaff2cba987bd25bf8a6ad2d19134fec5222a1e
+ca227573c6835221dbefb618a233fe28ced5223d540663ef11737d344705bf0b
 ```
+
+> **Build 2** — fixes a crash on first launch (`ERR_PACKAGE_PATH_NOT_EXPORTED`) where the Chromium downloader couldn't locate the playwright-core CLI inside the packaged ASAR.
 
 ## Install & run
 
