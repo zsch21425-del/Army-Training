@@ -10,6 +10,7 @@ files:
   - electron/**/*
   - automation/**/*
   - blackjack/**/*
+  - bundled-game/**/*
   - package.json
   - "!**/*.{md,log,test.js}"
   - "!src/**/*"
@@ -19,6 +20,8 @@ files:
 asarUnpack:
   - "node_modules/playwright/**/*"
   - "node_modules/playwright-core/**/*"
+  - "bundled-game/**/*"
+  - "automation/**/*"
 
 # Use node_modules-resident browsers so the installer is portable.
 extraResources: []

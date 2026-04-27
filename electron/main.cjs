@@ -99,7 +99,12 @@ async function loadDriver() {
 }
 
 function bundledGameUrl() {
-  const p = path.join(__dirname, "..", "bundled-game", "index.html");
+  // The Playwright-launched Chromium is a separate process and can't read
+  // inside app.asar. Redirect to app.asar.unpacked when packaged.
+  let p = path.join(__dirname, "..", "bundled-game", "index.html");
+  if (p.includes(`${path.sep}app.asar${path.sep}`)) {
+    p = p.replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
+  }
   return pathToFileURL(p).href;
 }
 
