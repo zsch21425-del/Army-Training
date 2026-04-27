@@ -16,6 +16,19 @@ function browsersPath() {
   return path.join(app.getPath("userData"), "playwright-browsers");
 }
 
+// Locate playwright-core/cli.js on disk, accounting for ASAR packaging.
+// In dev: app.getAppPath() is the project root; cli.js sits under node_modules.
+// In packaged builds: app.getAppPath() ends in /app.asar — but cli.js needs to
+// be on real disk for `spawn` to read it, so we redirect to app.asar.unpacked
+// (electron-builder's `asarUnpack` config puts playwright-core there).
+function playwrightCliPath() {
+  const appPath = app.getAppPath();
+  const root = appPath.endsWith("app.asar")
+    ? appPath.replace(/app\.asar$/, "app.asar.unpacked")
+    : appPath;
+  return path.join(root, "node_modules", "playwright-core", "cli.js");
+}
+
 // Ensure Playwright's Chromium exists. If not, spawn the playwright CLI
 // using Electron-as-Node to download it. First run only; subsequent runs
 // skip immediately.
@@ -29,7 +42,10 @@ async function ensureChromium(emitLog) {
   } catch { /* fall through to install */ }
 
   emitLog?.({ msg: "First-run setup: downloading Chromium (~170 MB, one-time)...", level: "dim" });
-  const cliPath = require.resolve("playwright-core/cli.js");
+  const cliPath = playwrightCliPath();
+  if (!fs.existsSync(cliPath)) {
+    throw new Error(`playwright-core CLI not found at ${cliPath}`);
+  }
   await new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [cliPath, "install", "chromium"], {
       env: {
