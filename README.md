@@ -17,7 +17,7 @@ The `.exe` is **unsigned** (a Microsoft-trusted code-signing cert costs ~$300/ye
 
 To uninstall, just delete the folder.
 
-SHA-256: `d6af316804168aec4291ce1d17dada0413b8b77252e2f96f900764d56258ae6b`
+SHA-256: `ba5e1f53c9f2cb70b7d0ae7b9e8f82591730a19a85933f58103ed7a525157956`
 
 ### B. Installer wrapped in a ZIP
 
@@ -29,7 +29,7 @@ Browsers usually don't block `.zip` downloads. Inside is the standard NSIS insta
 2. Right-click → **Extract All**.
 3. Run the extracted `BlackjackBot-Setup-1.0.0.exe`. SmartScreen may still warn → **More info** → **Run anyway**.
 
-SHA-256 (zip): `0caf55c45215e3ffc38174f78ddcf313207aea26ffd105c3d7769977c7e19571`
+SHA-256 (zip): `627afb55d05e145329b6f689568ef3c9223c516ce4ab3fabb5f9517a7c300d13`
 
 ### C. Raw installer (likely to be blocked at download)
 
@@ -37,7 +37,9 @@ SHA-256 (zip): `0caf55c45215e3ffc38174f78ddcf313207aea26ffd105c3d7769977c7e19571
 
 This is what's blocked for you right now. Listed for completeness.
 
-SHA-256 (exe): `ca227573c6835221dbefb618a233fe28ced5223d540663ef11737d344705bf0b`
+SHA-256 (exe): `da2ab0651f46d7961b8dc877a93021a20f3c3c87888756cd843132a5d44ef696`
+
+> **Build 3** — fixes `ERR_FILE_NOT_FOUND` for the bundled game's `index.html` (the file lived inside `app.asar` where the Playwright-spawned Chromium can't read; now unpacked to `app.asar.unpacked`).
 
 ## If the browser flat-out refuses every download
 
