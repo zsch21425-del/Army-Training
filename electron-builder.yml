@@ -1,0 +1,60 @@
+appId: com.blackjackbot.app
+productName: Blackjack Bot
+copyright: Copyright (c) 2026
+
+# Files packed into the installer. We intentionally pack node_modules/playwright*
+# so the installer is self-contained; the Chromium binary must already live in
+# node_modules/playwright/.local-browsers at build time (run `npm run
+# playwright:install` before `npm run dist:win`).
+files:
+  - electron/**/*
+  - automation/**/*
+  - blackjack/**/*
+  - bundled-game/**/*
+  - package.json
+  - "!**/*.{md,log,test.js}"
+  - "!src/**/*"
+
+# Playwright's bundled Chromium lives under playwright-core. Unpack it from the
+# ASAR archive so the Node process can spawn the native binary.
+asarUnpack:
+  - "node_modules/playwright/**/*"
+  - "node_modules/playwright-core/**/*"
+  - "bundled-game/**/*"
+  - "automation/**/*"
+
+# Use node_modules-resident browsers so the installer is portable.
+extraResources: []
+
+directories:
+  output: dist-electron
+  buildResources: electron/build
+
+# --- Windows (primary target: NSIS installer .exe) ---
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: BlackjackBot-Setup-${version}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Blackjack Bot
+
+# --- macOS (optional) ---
+mac:
+  target:
+    - dmg
+  category: public.app-category.games
+  artifactName: BlackjackBot-${version}.${ext}
+
+# --- Linux (optional) ---
+linux:
+  target:
+    - AppImage
+  category: Game
+  artifactName: BlackjackBot-${version}.${ext}

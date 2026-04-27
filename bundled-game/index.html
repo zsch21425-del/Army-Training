@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Blackjack Table</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="table" data-role="table">
+      <header class="top">
+        <div class="title">6-Deck Blackjack — S17, DAS, LS, BJ 3:2</div>
+        <div class="meters">
+          <span>Bankroll: <b id="bankroll">$10,000</b></span>
+          <span>Bet: <b id="current-bet">$0</b></span>
+          <span>Shoe: <b id="shoe-left">6.0</b> decks</span>
+          <span id="message-wrap">Result: <b class="message" data-role="message" id="message">—</b></span>
+        </div>
+      </header>
+
+      <section class="felt">
+        <div class="hand dealer">
+          <div class="label">Dealer</div>
+          <div class="cards dealer-hand" data-role="dealer"></div>
+        </div>
+        <div class="hand player">
+          <div class="label">Player</div>
+          <div class="cards player-hand" data-role="player"></div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <div class="chips">
+          <button class="chip" data-chip="1">$1</button>
+          <button class="chip" data-chip="5">$5</button>
+          <button class="chip" data-chip="10">$10</button>
+          <button class="chip" data-chip="25">$25</button>
+          <button class="chip" data-chip="100">$100</button>
+          <button class="chip" data-chip="500">$500</button>
+          <button id="clear-bet" data-action="clear-bet">Clear</button>
+        </div>
+        <div class="actions">
+          <button id="deal"      data-action="deal">Deal</button>
+          <button id="hit"       data-action="hit"       disabled>Hit</button>
+          <button id="stand"     data-action="stand"     disabled>Stand</button>
+          <button id="double"    data-action="double"    disabled>Double</button>
+          <button id="split"     data-action="split"     disabled>Split</button>
+          <button id="surrender" data-action="surrender" disabled>Surrender</button>
+        </div>
+        <div class="insurance" id="insurance" hidden>
+          <span>Insurance?</span>
+          <button id="insurance-yes">Yes</button>
+          <button id="insurance-no">No</button>
+        </div>
+      </section>
+    </div>
+    <script src="./game.js"></script>
+  </body>
+</html>
